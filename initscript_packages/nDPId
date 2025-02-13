@@ -1,0 +1,107 @@
+#!/bin/sh
+
+# nDPId Init Script for IPFire
+#
+# Description: Manages the nDPId and related nDPI services (nDPIsrvd and nDPIsrvd-analysed).
+# Author: ummeegge
+# Date: 12.02.2025
+#
+# Usage: /etc/init.d/nDPId {start|stop|restart|status}
+############################################################################################
+#
+
+. /etc/sysconfig/rc
+. ${rc_functions}
+
+# Paths to the binaries
+NDPID_BIN="/usr/sbin/nDPId"
+NDPISRVD_BIN="/usr/bin/nDPIsrvd"
+NDPISRVD_ANALYSED_BIN="/usr/bin/nDPIsrvd-analysed"
+
+# Directory for PID files and collector socket
+PID_DIR="/run/nDPId"
+COLLECTOR_DIR="/run/nDPIsrvd"
+
+# Log files
+NDPID_LOG="/var/log/nDPId/ndpid.log"
+NDPISRVD_LOG="/var/log/nDPId/ndpisrvd.log"
+
+# Function to check if a binary exists and is executable
+check_binary() {
+    if [ ! -x "$1" ]; then
+        echo "Error: $1 not found or not executable."
+        exit 1
+    fi
+}
+
+# Check the binaries for nDPId and related services
+check_binary "${NDPID_BIN}"
+check_binary "${NDPISRVD_BIN}"
+
+case "$1" in
+    start)
+        boot_mesg "Creating directory for collector socket..."
+        mkdir -p ${COLLECTOR_DIR} || { echo "Failed to create ${COLLECTOR_DIR}"; exit 1; }
+        chown ndpisrvd:ndpi ${COLLECTOR_DIR}
+        chmod 750 ${COLLECTOR_DIR}
+
+        boot_mesg "Creating directory for PID files..."
+        mkdir -p ${PID_DIR} || { echo "Failed to create ${PID_DIR}"; exit 1; }
+        chown ndpid:ndpi ${PID_DIR}
+
+        boot_mesg "Starting nDPI service daemon..."
+        ${NDPISRVD_BIN} -f /etc/nDPId/nDPIsrvd.conf -L ${NDPISRVD_LOG} 2>&1 &
+        evaluate_retval
+
+        sleep 2  # Give nDPIsrvd time to create sockets
+
+        boot_mesg "Setting socket permissions..."
+        chmod 660 ${COLLECTOR_DIR}/collector
+        chmod 660 ${COLLECTOR_DIR}/distributor
+        chown ndpisrvd:ndpi ${COLLECTOR_DIR}/collector
+        chown ndpisrvd:ndpi ${COLLECTOR_DIR}/distributor
+        evaluate_retval
+
+        # Set ownership for nDPIsrvd logging
+        touch ${NDPISRVD_LOG}
+        chown ndpisrvd:ndpi ${NDPISRVD_LOG}
+        chmod 640 ${NDPISRVD_LOG}
+
+        boot_mesg "Starting nDPId..."
+        ${NDPID_BIN} -f /etc/nDPId/nDPId.conf -L ${NDPID_LOG} 2>&1 &
+        evaluate_retval
+        
+        ;;
+    stop)
+        boot_mesg "Stopping nDPId..."
+        killall -9 ${NDPID_BIN} > /dev/null 2>&1 &
+        evaluate_retval
+        
+        boot_mesg "Stopping nDPI service daemon..."
+        killall ${NDPISRVD_BIN} > /dev/null 2>&1 &
+        evaluate_retval
+
+        boot_mesg "Removing directories for PID files and collector socket..."
+        rm -rf ${PID_DIR}
+        rm -rf ${COLLECTOR_DIR}
+        rm -rf /tmp/ndpid-*
+        sleep 3
+    ;;
+    restart)
+        $0 stop
+        sleep 1
+        $0 start
+        ;;
+    status)
+        statusproc ${NDPID_BIN}
+        statusproc ${NDPISRVD_BIN}
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|restart|status}"
+        exit 1
+        ;;
+esac
+
+exit 0
+
+

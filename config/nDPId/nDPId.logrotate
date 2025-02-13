@@ -1,0 +1,9 @@
+/var/log/nDPId/*.log {
+    weekly             # Rotate the logs weekly
+    rotate 10         # Keep a maximum of 10 old log files
+    compress          # Compress old log files to save space
+    delaycompress     # Compress the logs only after the next rotation
+    notifempty        # Do not rotate empty log files
+    missingok         # Ignore missing log files without error
+    create 640 ndpid ndpi  # Create new log files with specified permissions and ownership
+}

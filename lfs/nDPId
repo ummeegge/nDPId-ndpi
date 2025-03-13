@@ -108,7 +108,8 @@ $(TARGET) : $(patsubst %,$(DIR_DL)/%,$(objects))
 
 
 	# Install initscripts
-	$(call INSTALL_INITSCRIPTS,$(SERVICES))
+	install -v -m 754 $(DIR_SRC)/config/nDPId/nDPId.init \
+		/etc/rc.d/init.d/nDPId
 
 	@rm -rf $(DIR_APP)
 	@$(POSTBUILD)
